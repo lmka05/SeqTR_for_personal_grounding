@@ -3,12 +3,16 @@ class Config:
     train_ann_file = "/kaggle/input/datasets/minhkhoai/personal-grounding/data/train.json"
     dev_ann_file = "/kaggle/input/datasets/minhkhoai/personal-grounding/data/dev.json"
     test_ann_file = "/kaggle/input/datasets/minhkhoai/personal-grounding/data/test.json"
-    
+
+    # Đường dẫn tới file Word2Vec tiếng Việt đã tải
+    w2v_path = "/kaggle/input/datasets/minhkhoai/personal-grounding/data/word2vec_vi_words_300dims/word2vec_vi_words_300dims.txt"
+    w2v_is_binary = False  # Đặt True nếu là tệp .bin, False nếu là tệp .vec/.txt
+    glove_dim = 300       # Số chiều của vector Word2Vec (thường là 300)
+
     img_size = 640
 
     max_token = 15
 
-    glove_dim = 300
 
     # Tham số cho visual backbone
     backbone_out_channels = 1024 # số channel đầu ra của backbone (ResNet-50)
