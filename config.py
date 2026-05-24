@@ -1,8 +1,8 @@
 class Config:
-    img_dir = "D:\Study_UIT\Personal Grounding\data\images\images"
-    train_ann_file = "D:\Study_UIT\Personal Grounding\data\train.json"
-    dev_ann_file = "D:\Study_UIT\Personal Grounding\data\dev.json"
-    test_ann_file = "D:\Study_UIT\Personal Grounding\data\test.json"
+    img_dir = "/kaggle/input/datasets/minhkhoai/personal-grounding/data/images/images"
+    train_ann_file = "/kaggle/input/datasets/minhkhoai/personal-grounding/data/train.json"
+    dev_ann_file = "/kaggle/input/datasets/minhkhoai/personal-grounding/data/dev.json"
+    test_ann_file = "/kaggle/input/datasets/minhkhoai/personal-grounding/data/test.json"
     
     img_size = 640
 
