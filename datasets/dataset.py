@@ -131,10 +131,9 @@ def transform_bbox(bbox_xywh, scale, img_shape_after_resize):
 
     return torch.tensor([x1, y1, x2, y2], dtype=torch.float32)
 
-
 class CustomGroundingDataset(Dataset):
     """
-    Dataset class cho bộ dữ liệu Visual Grounding tùy chỉnh.
+    Dataset class cho bộ dữ liệu Visual Grounding tùy chỉnh tiếng Việt (Bản Chống Lỗi).
     """
     def __init__(self, ann_file, img_dir, split, token2idx, max_token=15, img_size=640):
         super().__init__()
@@ -143,83 +142,81 @@ class CustomGroundingDataset(Dataset):
         self.token2idx = token2idx
         self.max_token = max_token
         self.img_size = img_size
-
-        # Đọc file JSON tùy chỉnh
+        # Đọc dữ liệu JSON tùy chỉnh
         with open(ann_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
-
         self.anns = []
-        # Phân tích cấu trúc dữ liệu tùy chỉnh
         for img_id, img_info in data.items():
+            # Bỏ qua nếu dữ liệu không chuẩn
+            if not isinstance(img_info, dict) or 'filename' not in img_info:
+                continue
+                
             filename = img_info['filename']
+            bboxes = img_info.get('bboxes', [])
             
-            # Duyệt qua từng bounding box của ảnh này
-            for bbox_idx, bbox_info in enumerate(img_info['bboxes']):
-                points = bbox_info['points']
+            if bboxes is None:
+                bboxes = []
+            for bbox_idx, bbox_info in enumerate(bboxes):
+                # 1. TỰ ĐỘNG BỎ QUA NẾU THIẾU 'points'
+                if not isinstance(bbox_info, dict) or 'points' not in bbox_info:
+                    print(f"⚠️ Bỏ qua 1 bbox của ảnh '{img_id}' do thiếu 'points' hoặc sai cấu trúc.")
+                    continue
                 
-                # Lấy tọa độ x_min, x_max, y_min, y_max từ danh sách 4 điểm
-                xs = [p[0] for p in points]
-                ys = [p[1] for p in points]
-                xmin, xmax = min(xs), max(xs)
-                ymin, ymax = min(ys), max(ys)
-                
-                # Chuyển đổi thành [x, y, w, h] để tương thích với pipeline tiền xử lý gốc
-                w = xmax - xmin
-                h = ymax - ymin
-                bbox_xywh = [xmin, ymin, w, h]
-                
-                # Lấy danh sách câu miêu tả
-                expressions = bbox_info['description']
-
-                # Lưu trữ dưới dạng phẳng (mỗi bbox & description là 1 sample)
-                self.anns.append({
-                    'image_id': img_id,
-                    'filename': filename,
-                    'bbox': bbox_xywh,
-                    'expressions': expressions
-                })
-
-        print(f"[{split}] Loaded {len(self.anns)} samples from {os.path.basename(ann_file)}")
-
+                # 2. Bỏ qua nếu thiếu description
+                expressions = bbox_info.get('description', [])
+                if not expressions:
+                    continue
+                try:
+                    points = bbox_info['points']
+                    
+                    # Trích xuất xmin, ymin, xmax, ymax từ list 4 points
+                    xs = [p[0] for p in points]
+                    ys = [p[1] for p in points]
+                    xmin, xmax = min(xs), max(xs)
+                    ymin, ymax = min(ys), max(ys)
+                    
+                    w = xmax - xmin
+                    h = ymax - ymin
+                    bbox_xywh = [xmin, ymin, w, h]
+                    self.anns.append({
+                        'image_id': img_id,
+                        'filename': filename,
+                        'bbox': bbox_xywh,
+                        'expressions': expressions
+                    })
+                except Exception as e:
+                    print(f"⚠️ Lỗi khi xử lý tọa độ ở ảnh '{img_id}', bỏ qua: {e}")
+                    continue
+        print(f"[{split}] Loaded {len(self.anns)} valid samples từ {os.path.basename(ann_file)}")
     def __len__(self):
         return len(self.anns)
-
     def __getitem__(self, index):
         ann = self.anns[index]
-
-        # Đọc ảnh trực tiếp thông qua trường 'filename' trong json
+        # Nạp ảnh trực tiếp bằng filename
         img_path = os.path.join(self.img_dir, ann['filename'])
         pil_img = Image.open(img_path).convert('RGB')
         img = np.array(pil_img)
-
         ori_h, ori_w = img.shape[:2]
-
-        # Resize và Pad ảnh (Sử dụng lại hàm hỗ trợ có sẵn của file)
+        # Tiền xử lý ảnh (giữ nguyên logic gốc của SeqTR)
         img, scale = resize_image_keep_ratio(img, self.img_size)
         resized_h, resized_w = img.shape[:2]
-
         img = pad_image_to_square(img, self.img_size)
         img = normalize_image(img)      # [H, W, 3] float32 [0, 1]
         img = image_to_tensor(img)      # [3, H, W] tensor
-
         expressions = ann['expressions']
         if self.split == 'train':
-            # Khi train: Chọn ngẫu nhiên 1 câu mô tả để tăng cường dữ liệu (Data Augmentation)
+            # Chọn ngẫu nhiên câu mô tả khi train
             expression = random.choice(expressions)
         else:
-            # Khi val/test: Chọn câu đầu tiên để kết quả luôn nhất quán
             expression = expressions[0]
-
-        # Tokenize câu miêu tả sang dạng chỉ số (Tensor indices)
+        # Dùng tokenize_expression đã cập nhật tách từ tiếng Việt
         ref_inds = tokenize_expression(expression, self.token2idx, self.max_token)
-
-        # Scale coordinates của bbox tương ứng với ảnh đã resize
+        # Scale bbox
         gt_bbox = transform_bbox(
             ann['bbox'],
             scale=scale,
             img_shape_after_resize=(resized_h, resized_w)
         )
-
         img_meta = {
             'image_id': ann['image_id'],
             'expression': expression,
@@ -228,9 +225,8 @@ class CustomGroundingDataset(Dataset):
             'pad_shape': (self.img_size, self.img_size, 3),
             'scale_factor': np.array([scale, scale, scale, scale], dtype=np.float32),
         }
-
         return img, ref_inds, gt_bbox, img_meta
-    
+
 
 def collate_fn(batch):
     """
