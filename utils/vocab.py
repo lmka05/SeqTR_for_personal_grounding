@@ -32,19 +32,15 @@ def build_vocab(ann_files):
     # Nếu truyền vào 1 đường dẫn dạng chuỗi đơn lẻ, chuyển thành list để xử lý chung
     if isinstance(ann_files, str):
         ann_files = [ann_files]
-
     for ann_file in ann_files:
         if not os.path.exists(ann_file):
-            print(f"⚠️ Warning: File {ann_file} không tồn tại để build vocab.")
             continue
             
         with open(ann_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        # Duyệt qua cấu trúc cây JSON để trích xuất từ vựng
         for img_id, img_info in data.items():
-            if not isinstance(img_info, 'dict'):
-                continue
-
+            if not isinstance(img_info, dict): continue
+            
             bboxes = img_info.get('bboxes', [])
             if bboxes is None: continue
             
