@@ -32,6 +32,7 @@ def build_vocab(ann_files):
     # Nếu truyền vào 1 đường dẫn dạng chuỗi đơn lẻ, chuyển thành list để xử lý chung
     if isinstance(ann_files, str):
         ann_files = [ann_files]
+
     for ann_file in ann_files:
         if not os.path.exists(ann_file):
             print(f"⚠️ Warning: File {ann_file} không tồn tại để build vocab.")
@@ -41,14 +42,29 @@ def build_vocab(ann_files):
             data = json.load(f)
         # Duyệt qua cấu trúc cây JSON để trích xuất từ vựng
         for img_id, img_info in data.items():
-            for bbox_info in img_info['bboxes']:
-                # Duyệt qua danh sách câu miêu tả ('description') của box
-                for expression in bbox_info['description']:
+            if not isinstance(img_info, 'dict'):
+                continue
+
+            bboxes = img_info.get('bboxes', [])
+            if bboxes is None: continue
+            
+            for bbox_info in bboxes:
+                if not isinstance(bbox_info, dict): continue
+                
+                # Ép kiểu description về List giống như bên Dataset
+                expressions = bbox_info.get('description', [])
+                if isinstance(expressions, str):
+                    expressions = [expressions]
+                    
+                for expression in expressions:
+                    # Bỏ qua nếu là chuỗi rỗng
+                    if not isinstance(expression, str) or not expression.strip():
+                        continue
+                        
                     words = clean_expression(expression)
                     for word in words:
                         if word not in token2idx:
                             token2idx[word] = len(token2idx)
-    # Tạo ánh xạ ngược index -> từ
     idx2token = {idx: token for token, idx in token2idx.items()}
     return token2idx, idx2token
 

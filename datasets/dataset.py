@@ -156,22 +156,34 @@ class CustomGroundingDataset(Dataset):
             
             if bboxes is None:
                 bboxes = []
-            for bbox_idx, bbox_info in enumerate(bboxes):
-                # 1. TỰ ĐỘNG BỎ QUA NẾU THIẾU 'points'
-                if not isinstance(bbox_info, dict) or 'points' not in bbox_info:
-                    print(f"⚠️ Bỏ qua 1 bbox của ảnh '{img_id}' do thiếu 'points' hoặc sai cấu trúc.")
+            for bbox_idx, bbox_info in enumerate(bboxes): 
+                if not isinstance(bbox_info, dict):
                     continue
                 
-                # 2. Bỏ qua nếu thiếu description
+                # --- XỬ LÝ CÂU MIÊU TẢ (List hoặc String) ---
                 expressions = bbox_info.get('description', [])
+                if isinstance(expressions, str):
+                    expressions = [expressions] # Ép kiểu về List
+                
+                # Lọc bỏ các câu miêu tả rỗng (ví dụ: "")
+                expressions = [expr for expr in expressions if isinstance(expr, str) and expr.strip()]
                 if not expressions:
-                    continue
+                    continue # Bỏ qua nếu không có miêu tả nào hợp lệ
+                # --- XỬ LÝ TỌA ĐỘ ('points' hoặc 'coordinates') ---
                 try:
-                    points = bbox_info['points']
-                    
-                    # Trích xuất xmin, ymin, xmax, ymax từ list 4 points
-                    xs = [p[0] for p in points]
-                    ys = [p[1] for p in points]
+                    if 'points' in bbox_info:
+                        coords_data = bbox_info['points']
+                        xs = [p[0] for p in coords_data]
+                        ys = [p[1] for p in coords_data]
+                    elif 'coordinates' in bbox_info:
+                        coords_data = bbox_info['coordinates']
+                        xs = [p[0] for p in coords_data]
+                        ys = [p[1] for p in coords_data]
+                    else:
+                        print(f"⚠️ Bỏ qua 1 bbox ở ảnh '{img_id}' do không có key 'points' hay 'coordinates'.")
+                        continue
+                        
+                    # Lấy giới hạn min, max để tạo format [x, y, w, h] chuẩn
                     xmin, xmax = min(xs), max(xs)
                     ymin, ymax = min(ys), max(ys)
                     
@@ -185,7 +197,7 @@ class CustomGroundingDataset(Dataset):
                         'expressions': expressions
                     })
                 except Exception as e:
-                    print(f"⚠️ Lỗi khi xử lý tọa độ ở ảnh '{img_id}', bỏ qua: {e}")
+                    print(f"⚠️ Lỗi trích xuất tọa độ ở ảnh '{img_id}', bỏ qua: {e}")
                     continue
         print(f"[{split}] Loaded {len(self.anns)} valid samples từ {os.path.basename(ann_file)}")
     def __len__(self):
